@@ -8,3 +8,6 @@ Configurar los toldos y reglas mediante PUT /api/config con Authorization: Beare
 
 ## Pendiente
 Verificar API Shelly Cloud y modelos, integrar lectura de posición y órdenes verificadas, bloqueo de recuperación tras riesgo, editor web y notificaciones. Ningún umbral por defecto se considera seguro; configurar según fabricante. No sustituye protección física. Un fallo de Internet impide actuar.
+
+## Second iteration
+Open / for the responsive editor. The admin token remains in memory only. Configure SHELLY_HOST and SHELLY_AUTH_KEY as secrets; the status endpoint reads up to ten devices using Shelly Cloud v2. Hourly forecast conditions support any/all over 60–720 minutes. No physical control yet. The status query is manual, not scheduled. Forecast intervals are hourly, not real-time measurements. Remaining: calibrated live control, recovery lock, season profiles, notifications, deployment and integration verification.

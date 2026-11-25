@@ -9,6 +9,13 @@ export function evaluateCondition(c, weather) {
       : (values.includes(true)?true:values.includes(null)?null:false);
   }
   if (!metrics.has(c.metric)) return null;
+  if(c.horizonMinutes){
+    const now=weather.evaluationAt??weather.fetchedAt;
+    const rows=(weather.forecast??[]).filter(x=>x.at>now&&x.at<=now+c.horizonMinutes*60000);
+    if(!rows.length||rows.some(x=>!Number.isFinite(x[c.metric])))return null;
+    const values=rows.map(x=>evaluateCondition({...c,horizonMinutes:0},x));
+    return c.quantifier==="all"?values.every(Boolean):values.some(Boolean);
+  }
   const value=weather[c.metric];
   if (!Number.isFinite(value)||!Number.isFinite(c.value)) return null;
   switch(c.op){case "gt":return value>c.value;case "gte":return value>=c.value;case "lt":return value<c.value;case "lte":return value<=c.value;case "eq":return value===c.value;default:return null;}
@@ -33,7 +40,7 @@ export function evaluate({device,rules,weather,now=Date.now(),timezone="Europe/M
     if(!r.enabled||!r.targets.includes(device.id))continue;
     if(!r.safety&&!inSchedule(r.schedule,new Date(now),timezone))continue;
     if(!r.safety&&device.mode!=="auto")continue;
-    const condition=evaluateCondition(r.condition,weather);
+    const condition=evaluateCondition(r.condition,{...weather,evaluationAt:now});
     if(condition===null&&r.safety)unknownSafety=true;
     if(condition!==true)continue;
     state[r.id]=Number.isFinite(since[r.id])&&since[r.id]<=now?since[r.id]:now;
@@ -53,7 +60,7 @@ export function validateConfig(config){
   const ids=new Set();
   for(const d of config.devices){check(typeof d.id==="string"&&/^[a-zA-Z0-9_-]{1,64}$/.test(d.id)&&!ids.has(d.id),"Invalid device id");ids.add(d.id);check(["auto","manual","paused"].includes(d.mode),"Invalid mode");}
   const rids=new Set();
-  function condition(c,depth=0){check(c&&depth<6,"Invalid condition");if(["and","or"].includes(c.op)){check(Array.isArray(c.children)&&c.children.length>0&&c.children.length<=20,"Invalid group");c.children.forEach(x=>condition(x,depth+1));}else{check(metrics.has(c.metric)&&["gt","gte","lt","lte","eq"].includes(c.op)&&Number.isFinite(c.value),"Invalid comparison");}}
+  function condition(c,depth=0){check(c&&depth<6,"Invalid condition");if(["and","or"].includes(c.op)){check(Array.isArray(c.children)&&c.children.length>0&&c.children.length<=20,"Invalid group");c.children.forEach(x=>condition(x,depth+1));}else{check(c.horizonMinutes===undefined||[60,120,180,360,720].includes(c.horizonMinutes),"Invalid horizon");check(c.quantifier===undefined||["any","all"].includes(c.quantifier),"Invalid quantifier");check(metrics.has(c.metric)&&["gt","gte","lt","lte","eq"].includes(c.op)&&Number.isFinite(c.value),"Invalid comparison");}}
   for(const r of config.rules){check(typeof r.id==="string"&&/^[a-zA-Z0-9_-]{1,64}$/.test(r.id)&&!rids.has(r.id),"Invalid rule id");rids.add(r.id);check(typeof r.enabled==="boolean"&&typeof r.safety==="boolean","Invalid flags");check(Array.isArray(r.targets)&&r.targets.length>0&&r.targets.every(x=>ids.has(x)),"Invalid targets");check(Number.isInteger(r.priority)&&r.priority>=0&&r.priority<=100,"Invalid priority");check(Number.isFinite(r.position)&&r.position>=0&&r.position<=100&&(!r.safety||r.position===0),"Invalid position");check(Number.isInteger(r.durationMs)&&r.durationMs>=0&&r.durationMs<=86400000,"Invalid duration");if(r.schedule){const s=r.schedule;check(/^([01][0-9]|2[0-3]):[0-5][0-9]$/.test(s.start)&&/^([01][0-9]|2[0-3]):[0-5][0-9]$/.test(s.end)&&Array.isArray(s.days)&&s.days.every(x=>Number.isInteger(x)&&x>=0&&x<=6),"Invalid schedule");}condition(r.condition);}
   return config;
 }

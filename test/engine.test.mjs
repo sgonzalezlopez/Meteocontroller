@@ -15,3 +15,6 @@ test("stale data retracts",()=>assert.equal(run({fetchedAt:now-1000000,gust:10,s
 test("overnight uses start day",()=>assert.equal(inSchedule({start:"22:00",end:"06:00",days:[0]},new Date("2026-06-02T01:00:00Z"),"Europe/Madrid"),true));
 test("persistence waits",()=>assert.equal(run({gust:10,solar:600},{rules:[safety,{...sun,durationMs:60000}]}).position,null));
 test("invalid safety action rejected",()=>assert.throws(()=>validateConfig({devices:[device],rules:[{...safety,position:100}]})));
+
+test("forecast gust protection",()=>assert.equal(run({gust:10,solar:600,forecast:[{at:now+1800000,gust:35}]},{rules:[{...safety,condition:{...safety.condition,horizonMinutes:60}},sun]}).position,0));
+test("forecast missing is unsafe",()=>assert.equal(run({gust:10,solar:600,forecast:[]},{rules:[{...safety,condition:{...safety.condition,horizonMinutes:60}},sun]}).position,0));

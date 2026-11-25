@@ -1,6 +1,8 @@
 import {evaluate,validateConfig} from "./engine.mjs";
 import {getWeather} from "./weather";
-interface Env {DB:D1Database; ADMIN_TOKEN?:string; LOCATION_LAT?:string; LOCATION_LON?:string; TIMEZONE?:string}
+import {shellyStatus} from "./shelly";
+import {page} from "./page";
+interface Env {SHELLY_HOST?:string; SHELLY_AUTH_KEY?:string; DB:D1Database; ADMIN_TOKEN?:string; LOCATION_LAT?:string; LOCATION_LON?:string; TIMEZONE?:string}
 const json=(body:unknown,status=200)=>Response.json(body,{status,headers:{"Cache-Control":"no-store"}});
 async function config(env:Env){const row=await env.DB.prepare("SELECT body FROM config WHERE id=1").first<{body:string}>();return JSON.parse(row!.body);}
 async function tick(env:Env){
@@ -30,9 +32,12 @@ async function tick(env:Env){
 }
 export default {
   async fetch(req:Request,env:Env):Promise<Response>{
-    if(!env.ADMIN_TOKEN||req.headers.get("Authorization")!=="Bearer "+env.ADMIN_TOKEN)return json({error:"Unauthorized"},401);
     const path=new URL(req.url).pathname;
+    if(path==="/"&&req.method==="GET")return new Response(page,{headers:{"Content-Type":"text/html; charset=utf-8","Cache-Control":"no-store","Content-Security-Policy":"default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'","X-Content-Type-Options":"nosniff"}});
+    if(!env.ADMIN_TOKEN||req.headers.get("Authorization")!=="Bearer "+env.ADMIN_TOKEN)return json({error:"Unauthorized"},401);
     try{
+      if(path==="/api/status"&&req.method==="GET"){const weather=await env.DB.prepare("SELECT body FROM weather_cache WHERE id=1").first<{body:string}>();return json({mode:"observation",weather:weather?JSON.parse(weather.body):null,decisions:(await env.DB.prepare("SELECT * FROM decisions").all()).results});}
+      if(path==="/api/shelly/status"&&req.method==="GET"){const cfg=await config(env);const ids=[...new Set<string>(cfg.devices.map((d:any)=>d.shellyId).filter(Boolean))];return json(ids.length?await shellyStatus(env,ids):[]);}
       if(path==="/api/config"&&req.method==="GET")return json(await config(env));
       if(path==="/api/config"&&req.method==="PUT"){const cfg=validateConfig(await req.json());await env.DB.batch([env.DB.prepare("UPDATE config SET body=? WHERE id=1").bind(JSON.stringify(cfg)),env.DB.prepare("DELETE FROM rule_state")]);return json({ok:true});}
       if(path==="/api/history"&&req.method==="GET")return json((await env.DB.prepare("SELECT * FROM history ORDER BY id DESC LIMIT 100").all()).results);
