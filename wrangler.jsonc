@@ -1,0 +1,20 @@
+{
+  "name": "meteocontroller",
+  "main": "src/worker.ts",
+  "compatibility_date": "2025-11-01",
+  "triggers": {
+    "crons": [
+      "* * * * *"
+    ]
+  },
+  "vars": {
+    "TIMEZONE": "Europe/Madrid"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "meteocontroller",
+      "database_id": "REPLACE_WITH_D1_DATABASE_ID"
+    }
+  ]
+}

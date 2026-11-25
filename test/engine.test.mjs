@@ -1,0 +1,17 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import {evaluate,inSchedule,validateConfig} from "../src/engine.mjs";
+const now=Date.parse("2026-06-01T12:00:00Z");
+const device={id:"a",mode:"auto"};
+const safety={id:"wind",enabled:true,safety:true,targets:["a"],priority:0,position:0,durationMs:0,condition:{metric:"gust",op:"gte",value:25}};
+const sun={id:"sun",enabled:true,safety:false,targets:["a"],priority:100,position:100,durationMs:0,condition:{metric:"solar",op:"gte",value:400}};
+const run=(weather,extra={})=>evaluate({device,rules:[safety,sun],weather:{fetchedAt:now,...weather},now,...extra});
+test("safety wins regardless of priority",()=>assert.equal(run({gust:30,solar:600}).position,0));
+test("extends with valid weather",()=>assert.equal(run({gust:10,solar:600}).position,100));
+test("unknown safety data blocks extension",()=>assert.equal(run({solar:600}).position,0));
+test("manual preserves safety",()=>assert.equal(run({gust:30,solar:600},{device:{...device,mode:"manual"}}).position,0));
+test("manual suspends comfort",()=>assert.equal(run({gust:10,solar:600},{device:{...device,mode:"manual"}}).position,null));
+test("stale data retracts",()=>assert.equal(run({fetchedAt:now-1000000,gust:10,solar:600}).position,0));
+test("overnight uses start day",()=>assert.equal(inSchedule({start:"22:00",end:"06:00",days:[0]},new Date("2026-06-02T01:00:00Z"),"Europe/Madrid"),true));
+test("persistence waits",()=>assert.equal(run({gust:10,solar:600},{rules:[safety,{...sun,durationMs:60000}]}).position,null));
+test("invalid safety action rejected",()=>assert.throws(()=>validateConfig({devices:[device],rules:[{...safety,position:100}]})));
